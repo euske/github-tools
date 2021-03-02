@@ -9,26 +9,30 @@
 # Usage:
 #   $ ./list_repos -L java > repos-java.tmp
 #   $ cat repos-java.tmp
-#   ReactiveX/RxJava 2.x
-#   elastic/elasticsearch master
-#   square/retrofit master
+#   ReactiveX RxJava 2.x
+#   elastic elasticsearch master
+#   square retrofit master
 #   ...
 #
 #   $ ./list_repos repos-java.tmp > repos-java.lst
 #   $ cat repos-java.lst
-#   ReactiveX/RxJava 2.x 46ec6a6365ded7f9d96674baf40f7342d76ebdda
-#   elastic/elasticsearch master b1762d69b55959d87b8ddbd5eedb9b072a8f29af
-#   square/retrofit master b1ea7bad1fbddfe82412587a158d2aaa0b9f4241
+#   ReactiveX RxJava 2.x 46ec6a6365ded7f9d96674baf40f7342d76ebdda
+#   elastic elasticsearch master b1762d69b55959d87b8ddbd5eedb9b072a8f29af
+#   square retrofit master b1ea7bad1fbddfe82412587a158d2aaa0b9f4241
 #   ...
 #
-#   $ awk '{print "https://github.com/" $1 "/archive/" $3 ".zip"}' repos-java.lst > repos-java.urls
+# Download the repos:
+#   $ awk '{print "https://github.com/" $1 "/" $2 "/archive/" $4 ".zip"}' repos-java.lst > repos-java.urls
 #   https://github.com/ReactiveX/RxJava/archive/46ec6a6365ded7f9d96674baf40f7342d76ebdda.zip
 #   https://github.com/elastic/elasticsearch/archive/b1762d69b55959d87b8ddbd5eedb9b072a8f29af.zip
 #   https://github.com/square/retrofit/archive/b1ea7bad1fbddfe82412587a158d2aaa0b9f4241.zip
 #   ...
-#
 #   $ wget -w1 -i urls
 #
+# Download the wikis:
+#   $ awk '{print "git clone --depth=1 https://github.com/" $1 "/" $2 ".wiki wiki/" $2 "-" $4; print "sleep 1";}' repos-java.lst | sh
+#
+
 
 import sys
 import os.path
@@ -48,10 +52,10 @@ def get_search_url(language, minstars=100, perpage=100, page=1):
         URLBASE,
         f'/search/repositories?q=language:{language}+stars:>{minstars}&page={page+1}&per_page={perpage}')
 
-def get_repo_url(full_name, branch_name):
+def get_repo_url(user_name, repo_name, branch_name):
     return urljoin(
         URLBASE,
-        f'/repos/{full_name}/branches/{branch_name}')
+        f'/repos/{user_name}/{repo_name}/branches/{branch_name}')
 
 def call_api(url, wait=0.5):
     logging.debug(f'call_api: {url!r}...')
@@ -71,18 +75,19 @@ def list_repos(language, npages=10):
         for item in data['items']:
             full_name = item['full_name']
             default_branch = item['default_branch']
-            print(full_name, default_branch)
+            (user_name,_,repo_name) = full_name.partition('/')
+            print(user_name, repo_name, default_branch)
         sys.stdout.flush()
     return
 
 def list_commits(args):
     import fileinput
     for line in fileinput.input(args):
-        (full_name, default_branch) = line.strip().split(' ')
-        repo = call_api(get_repo_url(full_name, default_branch))
+        (user_name, repo_name, default_branch) = line.strip().split(' ')
+        repo = call_api(get_repo_url(user_name, repo_name, default_branch))
         commit = repo['commit']
         sha = commit['sha']
-        print(full_name, default_branch, sha)
+        print(user_name, repo_name, default_branch, sha)
         sys.stdout.flush()
     return 0
 
