@@ -14,7 +14,7 @@
 #   square retrofit master
 #   ...
 #
-#   $ ./list_repos repos-java.tmp > repos-java.lst
+#   $ ./list_repos -C repos-java.tmp > repos-java.lst
 #   $ cat repos-java.lst
 #   ReactiveX RxJava 2.x 46ec6a6365ded7f9d96674baf40f7342d76ebdda
 #   elastic elasticsearch master b1762d69b55959d87b8ddbd5eedb9b072a8f29af
@@ -47,16 +47,6 @@ with open(os.path.expanduser('~/.github_token')) as fp:
     TOKEN = fp.read().strip()
 SESSION = requests.Session()
 
-def get_search_url(language, minstars=100, perpage=100, page=1):
-    return urljoin(
-        URLBASE,
-        f'/search/repositories?q=language:{language}+stars:>{minstars}&page={page+1}&per_page={perpage}')
-
-def get_repo_url(user_name, repo_name, branch_name):
-    return urljoin(
-        URLBASE,
-        f'/repos/{user_name}/{repo_name}/branches/{branch_name}')
-
 def call_api(url, wait=0.5):
     logging.debug(f'call_api: {url!r}...')
     time.sleep(wait)
@@ -69,9 +59,12 @@ def call_api(url, wait=0.5):
     resp.close()
     return data
 
-def list_repos(language, npages=10):
+def search_repos(language, minstars=100, perpage=100, npages=10):
     for page in range(npages):
-        data = call_api(get_search_url(language, page=page))
+        url = urljoin(
+            URLBASE,
+            f'/search/repositories?q=language:{language}+stars:>{minstars}&page={page+1}&per_page={perpage}')
+        data = call_api(url)
         for item in data['items']:
             full_name = item['full_name']
             default_branch = item['default_branch']
@@ -80,11 +73,28 @@ def list_repos(language, npages=10):
         sys.stdout.flush()
     return
 
+def list_repos(args):
+    import fileinput
+    for line in fileinput.input(args):
+        f = line.strip().split(' ')
+        (user_name, repo_name) = f[:2]
+        url = urljoin(
+            URLBASE,
+            f'/repos/{user_name}/{repo_name}')
+        repo = call_api(url)
+        print(repo)
+        sys.stdout.flush()
+    return 0
+
 def list_commits(args):
     import fileinput
     for line in fileinput.input(args):
-        (user_name, repo_name, default_branch) = line.strip().split(' ')
-        repo = call_api(get_repo_url(user_name, repo_name, default_branch))
+        f = line.strip().split(' ')
+        (user_name, repo_name, default_branch) = f[:3]
+        url = urljoin(
+            URLBASE,
+            f'/repos/{user_name}/{repo_name}/branches/{branch_name}')
+        repo = call_api(url)
         commit = repo['commit']
         sha = commit['sha']
         print(user_name, repo_name, default_branch, sha)
@@ -94,27 +104,29 @@ def list_commits(args):
 def main(argv):
     import getopt
     def usage():
-        print(f'usage: {argv[0]} [-d] [-n npages] [-L language] [commit ...]')
+        print(f'usage: {argv[0]} [-d] [-n npages] [-L language] [-C] [path ...]')
         return 100
     try:
-        (opts, args) = getopt.getopt(argv[1:], 'dn:L:')
+        (opts, args) = getopt.getopt(argv[1:], 'dn:L:C')
     except getopt.GetoptError:
         return usage()
 
     level = logging.INFO
     npages = 10
     language = None
+    func = list_repos
     for (k, v) in opts:
         if k == '-d': level = logging.DEBUG
         elif k == '-n': npages = int(v)
         elif k == '-L': language = v
+        elif k == '-C': func = list_commits
 
     logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=level)
 
     if language is not None:
-        list_repos(language, npages=npages)
+        search_repos(language, npages=npages)
     else:
-        list_commits(args)
+        func(args)
     return 0
 
 if __name__ == '__main__': sys.exit(main(sys.argv))
