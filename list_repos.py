@@ -93,7 +93,7 @@ def list_commits(args):
         (user_name, repo_name, default_branch) = f[:3]
         url = urljoin(
             URLBASE,
-            f'/repos/{user_name}/{repo_name}/branches/{branch_name}')
+            f'/repos/{user_name}/{repo_name}/branches/{default_branch}')
         repo = call_api(url)
         commit = repo['commit']
         sha = commit['sha']

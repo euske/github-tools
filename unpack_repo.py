@@ -98,7 +98,7 @@ def main(argv):
         elif k == '-M':
             srcmap = sqlite3.connect(v)
             srcmap.executescript('''
-CREATE OR IGNORE TABLE SourceMap (
+CREATE TABLE IF NOT EXISTS SourceMap (
     Uid INTEGER PRIMARY KEY,
     FileName TEXT,
     RepoName TEXT,
@@ -106,7 +106,7 @@ CREATE OR IGNORE TABLE SourceMap (
     CommitId TEXT,
     SrcPath TEXT
 );
-CREATE OR IGNORE INDEX SourceMapIndex ON SourceMap(FileName);
+CREATE INDEX IF NOT EXISTS SourceMapIndex ON SourceMap(FileName);
 ''')
     if not args: return usage()
     assert (srcmap is None) == (repomap is None)
@@ -118,7 +118,8 @@ CREATE OR IGNORE INDEX SourceMapIndex ON SourceMap(FileName);
         repo = {}
         with open(repomap) as fp:
             for line in fp:
-                (reponame,branch,commit) = line.strip().split(' ')
+                (user,reponame,branch,commit) = line.strip().split(' ')
+                reponame = f'{user}/{reponame}'
                 repo[commit] = (reponame, branch)
 
     for zippath in args:
