@@ -22,7 +22,7 @@ def getkey(path):
     return h+'_'+name
 
 def unpack_repo(zippath, dstbase, pats=[], extract=False,
-                maxsize=1024*1024, srcmap=None, repo=None):
+                maxfiles=10000, maxsize=1024*1024, srcmap=None, repo=None):
     assert (srcmap is None) == (repo is None)
     try:
         zfp = zipfile.ZipFile(zippath)
@@ -35,6 +35,7 @@ def unpack_repo(zippath, dstbase, pats=[], extract=False,
         (reponame,branch) = repo[commit]
 
     dstdir = None
+    extracted = 0
     for info in zfp.infolist():
         if info.is_dir(): continue
         src = info.filename
@@ -57,7 +58,7 @@ def unpack_repo(zippath, dstbase, pats=[], extract=False,
                 except OSError:
                     pass
         dst = os.path.join(dstdir, getkey(src1))
-        logging.info(f'extract: {src1!r} -> {dst!r}')
+        logging.debug(f'extract: {src1!r} -> {dst!r}')
         if srcmap is not None:
             srcmap.execute(
                 'INSERT INTO SourceMap VALUES (NULL,?,?,?,?,?);',
@@ -70,25 +71,28 @@ def unpack_repo(zippath, dstbase, pats=[], extract=False,
                             data = fp.read(2**16)
                             if not data: break
                             out.write(data)
+                extracted += 1
             except IOError as e:
                 logging.error(f'error: {zippath}/{src!r}: {e}')
             except (zipfile.BadZipFile, zipfile.zlib.error) as e:
                 logging.error(f'error: {zippath}/{src!r}: {e}')
+        logging.info(f'extracted: {zippath}: {extracted} files.')
     return
 
 def main(argv):
     import getopt
     def usage():
-        print(f'usage: {argv[0]} [-d] [-n] [-A pat] [-J pat] [-m maxsize] [-b dstbase] [-R repos.lst] [-M srcmap.db] [zip ...]')
+        print(f'usage: {argv[0]} [-d] [-n] [-A pat] [-J pat] [-f maxfiles] [-m maxsize] [-b dstbase] [-R repos.lst] [-M srcmap.db] [zip ...]')
         return 100
     try:
-        (opts, args) = getopt.getopt(argv[1:], 'dnA:J:b:R:M:')
+        (opts, args) = getopt.getopt(argv[1:], 'dnA:J:f:m:b:R:M:')
     except getopt.GetoptError:
         return usage()
 
     level = logging.INFO
     extract = True
     pats = []
+    maxfiles = 10000
     maxsize = 1024*1024
     dstbase = '.'
     repomap = None
@@ -98,6 +102,7 @@ def main(argv):
         elif k == '-n': extract = False
         elif k == '-A': pats.append((re.compile(v), True))
         elif k == '-J': pats.append((re.compile(v), False))
+        elif k == '-f': maxfiles = int(v)
         elif k == '-m': maxsize = int(v)
         elif k == '-b': dstbase = v
         elif k == '-R': repomap = v
@@ -129,9 +134,9 @@ CREATE INDEX IF NOT EXISTS SourceMapIndex ON SourceMap(FileName);
                 repo[commit] = (reponame, branch)
 
     for zippath in args:
-        logging.info(f'extracting: {zippath}...')
         unpack_repo(zippath, dstbase,
-                    pats=pats, extract=extract, maxsize=maxsize,
+                    pats=pats, extract=extract,
+                    maxsize=maxsize, maxfiles=maxfiles,
                     srcmap=srcmap, repo=repo)
 
     if srcmap is not None:
