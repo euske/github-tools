@@ -3,7 +3,7 @@
 ##  unpack_repo.py - Unpack an entire repo .zip as a flat directory.
 ##
 ##  usage:
-##    $ unpack_repo.py -b src -p '\.java$' -R repos.lst -M srcmap.db zip/*.zip
+##    $ unpack_repo.py -b src -J '/test/' -A '\.java$' -R repos.lst -M srcmap.db zip/*.zip
 ##
 
 import sys
@@ -21,7 +21,7 @@ def getkey(path):
     name = INVALID.sub(lambda m:'_%04x' % ord(m.group(0)), name)
     return h+'_'+name
 
-def unpack_repo(zippath, dstbase, pat=None, extract=False,
+def unpack_repo(zippath, dstbase, pats=[], extract=False,
                 maxsize=1024*1024, srcmap=None, repo=None):
     assert (srcmap is None) == (repo is None)
     try:
@@ -39,7 +39,12 @@ def unpack_repo(zippath, dstbase, pat=None, extract=False,
         if info.is_dir(): continue
         src = info.filename
         if '/.' in src: continue
-        if pat is not None and not pat.search(src): continue
+        for (pat,ok) in pats:
+            if pat.search(src):
+                break
+        else:
+            ok = False
+        if not ok: continue
         if maxsize < info.file_size:
             logging.info(f'skipped: {src!r} ({info.file_size})')
             continue
@@ -74,16 +79,16 @@ def unpack_repo(zippath, dstbase, pat=None, extract=False,
 def main(argv):
     import getopt
     def usage():
-        print(f'usage: {argv[0]} [-d] [-n] [-p pat] [-m maxsize] [-b dstbase] [-R repos.lst] [-M srcmap.db] [zip ...]')
+        print(f'usage: {argv[0]} [-d] [-n] [-A pat] [-J pat] [-m maxsize] [-b dstbase] [-R repos.lst] [-M srcmap.db] [zip ...]')
         return 100
     try:
-        (opts, args) = getopt.getopt(argv[1:], 'dnp:b:R:M:')
+        (opts, args) = getopt.getopt(argv[1:], 'dnA:J:b:R:M:')
     except getopt.GetoptError:
         return usage()
 
     level = logging.INFO
     extract = True
-    pat = None
+    pats = []
     maxsize = 1024*1024
     dstbase = '.'
     repomap = None
@@ -91,7 +96,8 @@ def main(argv):
     for (k, v) in opts:
         if k == '-d': level = logging.DEBUG
         elif k == '-n': extract = False
-        elif k == '-p': pat = re.compile(v)
+        elif k == '-A': pats.append((re.compile(v), True))
+        elif k == '-J': pats.append((re.compile(v), False))
         elif k == '-m': maxsize = int(v)
         elif k == '-b': dstbase = v
         elif k == '-R': repomap = v
@@ -125,7 +131,7 @@ CREATE INDEX IF NOT EXISTS SourceMapIndex ON SourceMap(FileName);
     for zippath in args:
         logging.info(f'extracting: {zippath}...')
         unpack_repo(zippath, dstbase,
-                    pat=pat, extract=extract, maxsize=maxsize,
+                    pats=pats, extract=extract, maxsize=maxsize,
                     srcmap=srcmap, repo=repo)
 
     if srcmap is not None:
