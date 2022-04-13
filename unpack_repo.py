@@ -76,7 +76,7 @@ def unpack_repo(zippath, dstbase, pats=[], extract=False,
                 logging.error(f'error: {zippath}/{src!r}: {e}')
             except (zipfile.BadZipFile, zipfile.zlib.error) as e:
                 logging.error(f'error: {zippath}/{src!r}: {e}')
-        logging.info(f'extracted: {zippath}: {extracted} files.')
+    logging.info(f'extracted: {zippath}: {extracted} files.')
     return
 
 def main(argv):
